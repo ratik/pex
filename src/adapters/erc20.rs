@@ -1,41 +1,39 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::vec;
 
 use super::base::MetricsAdapter;
 use ethers::{abi::Abi, types::U256};
+use tokio::sync::Mutex;
 
 pub struct Erc20Adapter {
+    name: String,
     addresses: Vec<String>,
     contract: ethers::contract::ContractInstance<
         Arc<ethers::providers::Provider<ethers::providers::Http>>,
         ethers::providers::Provider<ethers::providers::Http>,
     >,
-    params: Vec<String>,
-    values: HashMap<String, super::base::Value>,
 }
 
 #[async_trait::async_trait]
 impl MetricsAdapter for Erc20Adapter {
-    fn get_params(&self) -> &Vec<String> {
-        &self.params
-    }
-
-    fn get_values(&self) -> &HashMap<String, super::base::Value> {
-        &self.values
+    fn get_name(&self) -> &str {
+        &self.name
     }
 
     async fn update_params(
         &mut self,
-        _params: Option<Vec<String>>,
+        metrics: Arc<Mutex<HashMap<String, super::base::Value>>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.update_balances().await?;
+        let mut storage = metrics.lock().await;
+        self.update_balances(&mut storage).await?;
         Ok(())
     }
 }
 
 impl Erc20Adapter {
-    pub fn new(
+    pub async fn new(
+        name: &str,
+        metrics: Arc<Mutex<HashMap<String, super::base::Value>>>,
         addresses: Vec<&str>,
         contract: &str,
         token: &str,
@@ -50,24 +48,32 @@ impl Erc20Adapter {
         let token_address: ethers::types::Address = contract.parse()?;
 
         let contract = ethers::contract::Contract::new(token_address, abi, client.clone());
-        let mut params = vec![];
+
+        let mut storage = metrics.lock().await;
         for addr in addresses.clone() {
-            params.push("balance_".to_string() + addr);
+            let key = format!("{}_balance_{}", name, addr);
+            let value = super::base::Value::Int(prometheus::IntGauge::new(
+                &key,
+                format!("Value of {}", key),
+            )?);
+            storage.insert(key, value);
         }
 
         Ok(Self {
+            name: name.to_string(),
             addresses: addresses
                 .clone()
                 .iter()
                 .map(|addr| addr.parse().unwrap())
                 .collect(),
             contract,
-            params,
-            values: HashMap::new(),
         })
     }
 
-    async fn update_balances(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn update_balances(
+        &mut self,
+        storage: &mut HashMap<String, super::base::Value>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         for addr in self.addresses.clone() {
             let address: ethers::types::Address = addr.parse()?;
             let balance: U256 = self
@@ -75,10 +81,14 @@ impl Erc20Adapter {
                 .method::<_, U256>("balanceOf", address)?
                 .call()
                 .await?;
-            self.values.insert(
-                "balance_".to_string() + &addr,
-                super::base::Value::Int(balance.as_u64() as i128),
-            );
+
+            let key = "balance_".to_string() + &addr;
+            match storage.get(&self.get_key(&key)) {
+                Some(super::base::Value::Int(v)) => {
+                    v.set(balance.as_u64() as i64);
+                }
+                _ => unreachable!(),
+            }
         }
         Ok(())
     }

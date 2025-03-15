@@ -22,9 +22,12 @@
 //     Ok(())
 // }
 
+use portfolio_explorer::adapters::base::Value;
 use portfolio_explorer::config::Config;
 use portfolio_explorer::{adapter_factory::create_adapter, adapters::base::MetricsAdapter};
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::time::{Duration, sleep};
 
 #[tokio::main]
@@ -32,9 +35,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_file("config.toml")?;
     let mut adapters: HashMap<String, Box<dyn MetricsAdapter + Send + Sync>> = HashMap::new();
 
-    for (name, metric) in &config.metrics {
-        if metric.enabled {
-            match create_adapter(metric) {
+    let registry = Arc::new(prometheus::Registry::new());
+    let metrics = Arc::new(Mutex::new(HashMap::<String, Value>::new()));
+
+    for (name, config) in &config.metrics {
+        if config.enabled {
+            match create_adapter(name.to_string(), metrics.clone(), config).await {
                 Ok(adapter) => {
                     adapters.insert(name.clone(), adapter);
                 }
@@ -42,14 +48,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+    {
+        let metrics = metrics.clone();
+        let metrics = metrics.lock().await;
+        for metric in metrics.values() {
+            match metric {
+                Value::Int(gauge) => {
+                    registry.register(Box::new(gauge.clone()))?;
+                }
+                Value::Float(gauge) => {
+                    registry.register(Box::new(gauge.clone()))?;
+                }
+            }
+        }
+    }
 
     loop {
         for (name, adapter) in adapters.iter_mut() {
-            if let Err(e) = adapter.update_params(None).await {
+            if let Err(e) = adapter.update_params(metrics.clone()).await {
                 eprintln!("Error updating {}: {}", name, e);
-            }
-            for param in adapter.get_params() {
-                println!("{}_{}: {:?}", name, param, adapter.get_value(param));
+            } else {
+                println!("Updated {}", name);
             }
         }
         sleep(Duration::from_secs(10)).await;

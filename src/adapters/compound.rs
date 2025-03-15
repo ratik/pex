@@ -5,40 +5,39 @@ use std::vec;
 use super::base::MetricsAdapter;
 use ethers::providers::Middleware;
 use ethers::{abi::Abi, types::U256};
+use tokio::sync::Mutex;
 
 pub struct CompoundAdapter {
+    name: String,
     addresses: Vec<String>,
     client: Arc<ethers::prelude::Provider<ethers::providers::Http>>,
     contract: ethers::contract::ContractInstance<
         Arc<ethers::providers::Provider<ethers::providers::Http>>,
         ethers::providers::Provider<ethers::providers::Http>,
     >,
-    params: Vec<String>,
-    values: HashMap<String, super::base::Value>,
 }
 
 #[async_trait::async_trait]
 impl MetricsAdapter for CompoundAdapter {
-    fn get_params(&self) -> &Vec<String> {
-        &self.params
-    }
-
-    fn get_values(&self) -> &HashMap<String, super::base::Value> {
-        &self.values
+    fn get_name(&self) -> &str {
+        &self.name
     }
 
     async fn update_params(
         &mut self,
-        _params: Option<Vec<String>>,
+        metrics: Arc<Mutex<HashMap<String, super::base::Value>>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.update_balances().await?;
-        self.update_general_info().await?;
+        let mut storage = metrics.lock().await;
+        self.update_balances(&mut storage).await?;
+        self.update_general_info(&mut storage).await?;
         Ok(())
     }
 }
 
 impl CompoundAdapter {
-    pub fn new(
+    pub async fn new(
+        name: &str,
+        metrics: Arc<Mutex<HashMap<String, super::base::Value>>>,
         addresses: Vec<&str>,
         contract: &str,
         token: &str,
@@ -53,9 +52,18 @@ impl CompoundAdapter {
         let token_address: ethers::types::Address = contract.parse()?;
 
         let contract = ethers::contract::Contract::new(token_address, abi, client.clone());
-        let mut params = vec!["interest".to_string()];
+        let mut storage = metrics.lock().await;
+        let key = format!("{}_interest", name);
+        let value =
+            super::base::Value::Float(prometheus::Gauge::new(&key, format!("Value of {}", key))?);
+        storage.insert(key, value);
         for addr in addresses.clone() {
-            params.push("balance_".to_string() + addr);
+            let key = format!("{}_balance_{}", name, addr);
+            let value = super::base::Value::Int(prometheus::IntGauge::new(
+                &key,
+                format!("Value of {}", key),
+            )?);
+            storage.insert(key, value);
         }
 
         Ok(Self {
@@ -66,12 +74,14 @@ impl CompoundAdapter {
                 .map(|addr| addr.parse().unwrap())
                 .collect(),
             contract,
-            params,
-            values: HashMap::new(),
+            name: name.to_string(),
         })
     }
 
-    async fn update_balances(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn update_balances(
+        &mut self,
+        storage: &mut HashMap<String, super::base::Value>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         for addr in self.addresses.clone() {
             let address: ethers::types::Address = addr.parse()?;
             let balance: U256 = self
@@ -79,16 +89,21 @@ impl CompoundAdapter {
                 .method::<_, U256>("balanceOfUnderlying", address)?
                 .call()
                 .await?;
-
-            self.values.insert(
-                "balance_".to_string() + &addr,
-                super::base::Value::Int(balance.as_u64() as i128),
-            );
+            let value = storage.get(&self.get_key(&format!("balance_{}", addr)));
+            match value {
+                Some(super::base::Value::Int(v)) => {
+                    v.set(balance.as_u64() as i64);
+                }
+                _ => unreachable!(),
+            }
         }
         Ok(())
     }
 
-    async fn update_general_info(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn update_general_info(
+        &mut self,
+        storage: &mut HashMap<String, super::base::Value>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let current_unix_timestamp = U256::from(chrono::Utc::now().timestamp());
         let current_block = U256::from(self.client.get_block_number().await?.as_u64());
         let far_block = self
@@ -109,12 +124,13 @@ impl CompoundAdapter {
         let p: f64 = (1.0 + supply_rate.as_u64() as f64 / 10f64.powi(18))
             .powi(blocks_in_year.as_u64() as i32)
             - 1.0;
-
-        self.values.insert(
-            "interest".to_string(),
-            super::base::Value::Float((p * 100.0) as f32),
-        );
-
+        let value = storage.get(&self.get_key("interest"));
+        match value {
+            Some(super::base::Value::Float(v)) => {
+                v.set(p);
+            }
+            _ => unreachable!(),
+        }
         Ok(())
     }
 }
