@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::vec;
-
 use super::base::MetricsAdapter;
 use ethers::providers::Middleware;
 use ethers::{abi::Abi, types::U256};
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub struct CompoundAdapter {

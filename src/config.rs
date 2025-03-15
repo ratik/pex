@@ -4,6 +4,7 @@ use std::fs;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    pub interval: u64, // in seconds
     pub metrics: HashMap<String, MetricConfig>,
 }
 

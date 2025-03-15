@@ -1,27 +1,3 @@
-// use portfolio_explorer::adapters::{self, base::MetricsAdapter};
-
-// #[tokio::main]
-// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//     // let mut comp = adapters::compound::CompoundAdapter::new(
-//     //     vec!["0xe26E8e942193f02dCfcaA798057Df696A3b79811"],
-//     //     "0x48759F220ED983dB51fA7A8C0D2AAb8f3ce4166a",
-//     //     "354563ff369a4d2ab6b4634b3e6809da",
-//     // )?;
-//     // let mut comp = adapters::erc20::Erc20Adapter::new(
-//     //     vec!["0x6654C4cA46dB6003bf819803dD88eD6af118dcF9"],
-//     //     "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-//     //     "354563ff369a4d2ab6b4634b3e6809da",
-//     // )?;
-//     let mut comp = adapters::cosmos_bank::CosmosBankAdapter::new(
-//         vec!["celestia1x38l2kya94s69g3nc4hjp4yugfr2srm30whg0e"],
-//         "https://celestia-rpc.polkachu.com:443/",
-//         vec!["utia"],
-//     )?;
-//     comp.update_params(None).await?;
-//     println!("{:?}", comp.get_values());
-//     Ok(())
-// }
-
 use portfolio_explorer::adapters::base::Value;
 use portfolio_explorer::config::Config;
 use portfolio_explorer::{adapter_factory::create_adapter, adapters::base::MetricsAdapter};
@@ -29,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, sleep};
+use warp::Filter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -63,6 +40,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    let registry_clone = registry.clone();
+    tokio::spawn(async move {
+        let metrics_route = warp::path!("metrics").map(move || {
+            let mut buffer = String::new();
+            let encoder = prometheus::TextEncoder::new();
+            let metric_families = registry_clone.gather();
+            encoder.encode_utf8(&metric_families, &mut buffer).unwrap();
+            warp::reply::with_header(buffer, "Content-Type", "text/plain; version=0.0.4")
+        });
+
+        warp::serve(metrics_route).run(([0, 0, 0, 0], 9100)).await;
+    });
+
     loop {
         for (name, adapter) in adapters.iter_mut() {
             if let Err(e) = adapter.update_params(metrics.clone()).await {
@@ -71,6 +61,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Updated {}", name);
             }
         }
-        sleep(Duration::from_secs(10)).await;
+        sleep(Duration::from_secs(config.interval)).await;
     }
 }
