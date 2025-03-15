@@ -5,7 +5,6 @@ use std::vec;
 use super::base::MetricsAdapter;
 use ethers::providers::Middleware;
 use ethers::{abi::Abi, types::U256};
-use tokio::sync::Mutex;
 
 pub struct CompoundAdapter {
     addresses: Vec<String>,
@@ -15,7 +14,7 @@ pub struct CompoundAdapter {
         ethers::providers::Provider<ethers::providers::Http>,
     >,
     params: Vec<String>,
-    values: Arc<Mutex<HashMap<String, super::base::Value>>>,
+    values: HashMap<String, super::base::Value>,
 }
 
 #[async_trait::async_trait]
@@ -24,8 +23,8 @@ impl MetricsAdapter for CompoundAdapter {
         &self.params
     }
 
-    fn get_values(&self) -> Arc<Mutex<HashMap<String, super::base::Value>>> {
-        Arc::clone(&self.values)
+    fn get_values(&self) -> &HashMap<String, super::base::Value> {
+        &self.values
     }
 
     async fn update_params(
@@ -68,7 +67,7 @@ impl CompoundAdapter {
                 .collect(),
             contract,
             params,
-            values: Arc::new(Mutex::new(HashMap::new())),
+            values: HashMap::new(),
         })
     }
 
@@ -80,8 +79,8 @@ impl CompoundAdapter {
                 .method::<_, U256>("balanceOfUnderlying", address)?
                 .call()
                 .await?;
-            let mut values = self.values.lock().await;
-            values.insert(
+
+            self.values.insert(
                 "balance_".to_string() + &addr,
                 super::base::Value::Int(balance.as_u64() as i128),
             );
@@ -110,8 +109,8 @@ impl CompoundAdapter {
         let p: f64 = (1.0 + supply_rate.as_u64() as f64 / 10f64.powi(18))
             .powi(blocks_in_year.as_u64() as i32)
             - 1.0;
-        let mut values = self.values.lock().await;
-        values.insert(
+
+        self.values.insert(
             "interest".to_string(),
             super::base::Value::Float((p * 100.0) as f32),
         );

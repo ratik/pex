@@ -4,7 +4,6 @@ use std::vec;
 
 use super::base::MetricsAdapter;
 use ethers::{abi::Abi, types::U256};
-use tokio::sync::Mutex;
 
 pub struct Erc20Adapter {
     addresses: Vec<String>,
@@ -13,7 +12,7 @@ pub struct Erc20Adapter {
         ethers::providers::Provider<ethers::providers::Http>,
     >,
     params: Vec<String>,
-    values: Arc<Mutex<HashMap<String, super::base::Value>>>,
+    values: HashMap<String, super::base::Value>,
 }
 
 #[async_trait::async_trait]
@@ -22,8 +21,8 @@ impl MetricsAdapter for Erc20Adapter {
         &self.params
     }
 
-    fn get_values(&self) -> Arc<Mutex<HashMap<String, super::base::Value>>> {
-        Arc::clone(&self.values)
+    fn get_values(&self) -> &HashMap<String, super::base::Value> {
+        &self.values
     }
 
     async fn update_params(
@@ -64,7 +63,7 @@ impl Erc20Adapter {
                 .collect(),
             contract,
             params,
-            values: Arc::new(Mutex::new(HashMap::new())),
+            values: HashMap::new(),
         })
     }
 
@@ -76,8 +75,7 @@ impl Erc20Adapter {
                 .method::<_, U256>("balanceOf", address)?
                 .call()
                 .await?;
-            let mut values = self.values.lock().await;
-            values.insert(
+            self.values.insert(
                 "balance_".to_string() + &addr,
                 super::base::Value::Int(balance.as_u64() as i128),
             );

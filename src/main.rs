@@ -49,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("Error updating {}: {}", name, e);
             }
             for param in adapter.get_params() {
-                println!("{}_{}: {:?}", name, param, adapter.get_value(param).await);
+                println!("{}_{}: {:?}", name, param, adapter.get_value(param));
             }
         }
         sleep(Duration::from_secs(10)).await;

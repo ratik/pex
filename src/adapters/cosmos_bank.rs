@@ -2,10 +2,8 @@ use bytes::Bytes;
 use cosmos_sdk_proto::cosmos::base::query::v1beta1::PageRequest;
 use cosmos_sdk_proto::traits::Message;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::vec;
 use tendermint_rpc::Client;
-use tokio::sync::Mutex;
 
 use super::base::MetricsAdapter;
 
@@ -14,7 +12,7 @@ pub struct CosmosBankAdapter {
     client: tendermint_rpc::HttpClient,
     denoms: Vec<String>,
     params: Vec<String>,
-    values: Arc<Mutex<HashMap<String, super::base::Value>>>,
+    values: HashMap<String, super::base::Value>,
 }
 
 #[async_trait::async_trait]
@@ -23,8 +21,8 @@ impl MetricsAdapter for CosmosBankAdapter {
         &self.params
     }
 
-    fn get_values(&self) -> Arc<Mutex<HashMap<String, super::base::Value>>> {
-        Arc::clone(&self.values)
+    fn get_values(&self) -> &HashMap<String, super::base::Value> {
+        &self.values
     }
 
     async fn update_params(
@@ -59,7 +57,7 @@ impl CosmosBankAdapter {
             client,
             params,
             denoms: denoms.iter().map(|d| d.to_string()).collect(),
-            values: Arc::new(Mutex::new(HashMap::new())),
+            values: HashMap::new(),
         })
     }
 
@@ -91,9 +89,9 @@ impl CosmosBankAdapter {
                 let denom = b.denom;
                 let amount = b.amount;
                 if self.denoms.contains(&denom) {
-                    let mut values = self.values.lock().await;
                     let key = format!("balance_{}_{}", &address, denom);
-                    values.insert(key, super::base::Value::Int(amount.parse()?));
+                    self.values
+                        .insert(key, super::base::Value::Int(amount.parse()?));
                 }
             }
         }
