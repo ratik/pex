@@ -11,7 +11,7 @@ This is a Rust-based monitoring tool that collects and exports financial and blo
 
 ---
 
-### Configuration **
+### Configuration
 Find example config in config.sample.toml file.
 ---
 
