@@ -15,6 +15,7 @@ pub async fn create_adapter(
     config: &MetricConfig,
 ) -> Result<Box<dyn MetricsAdapter + Send + Sync>, Box<dyn Error>> {
     println!("Creating adapter: {}", config.adapter);
+    // println!("{:?}", config);
     match config.adapter.as_str() {
         "compound" | "erc20" => {
             let addresses = config.config["addresses"]
@@ -27,16 +28,28 @@ pub async fn create_adapter(
             let contract = config.config["contract"]
                 .as_str()
                 .ok_or("Missing contract")?;
+
             let infura_token = config.config["infura_token"]
                 .as_str()
                 .ok_or("Missing infura_token")?;
 
+            let decimals: u8 = config.config["decimals"].as_u64().unwrap() as u8 - 2;
+
             match config.adapter.as_str() {
                 "compound" => Ok(Box::new(
-                    CompoundAdapter::new(&name, metrics, addresses, contract, infura_token).await?,
+                    CompoundAdapter::new(
+                        &name,
+                        metrics,
+                        addresses,
+                        contract,
+                        infura_token,
+                        decimals,
+                    )
+                    .await?,
                 )),
                 "erc20" => Ok(Box::new(
-                    Erc20Adapter::new(&name, metrics, addresses, contract, infura_token).await?,
+                    Erc20Adapter::new(&name, metrics, addresses, contract, infura_token, decimals)
+                        .await?,
                 )),
                 _ => unreachable!(),
             }
