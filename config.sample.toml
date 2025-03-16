@@ -1,0 +1,67 @@
+concurrency = 3
+interval = 60
+[metrics.compound]
+enabled = true
+adapter = "compound"
+[metrics.ironbank.config]
+decimals = 6
+contract = "0x487..."
+infura_token = "..."
+addresses = ["0xe2..."]
+
+[metrics.USDT]
+enabled = true
+adapter = "erc20"
+[metrics.USDT.config]
+decimals = 6
+contract = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+infura_token = "..."
+addresses = ["0xe2..."]
+
+[metrics.USDC]
+enabled = true
+adapter = "erc20"
+[metrics.USDC.config]
+contract = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+infura_token = "..."
+decimals = 6
+addresses = [
+    "0xe26E8e942193f02dCfcaA798057Df696A3b79811",
+    "0x6654C4cA46dB6003bf819803dD88eD6af118dcF9",
+]
+
+[metrics.DAI]
+enabled = true
+adapter = "erc20"
+[metrics.DAI.config]
+decimals = 18
+contract = "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+infura_token = "..."
+addresses = ["0xe2..."]
+
+
+[metrics.celestia]
+enabled = true
+adapter = "cosmos_bank"
+
+[metrics.celestia.config]
+rpc = "https://celestia-rpc.polkachu.com:443/"
+addresses = ["celestia1x..."]
+denoms = ["utia"]
+
+
+[metrics.PYTH]
+enabled = true
+adapter = "x§"
+[metrics.PYTH.config]
+addresses = "neutron1m2emc93m9gpwgsrsf2vylv9xvgqh654630v7dfrhrkmr5slly53spg85wv"
+rpc = "https://rpc-lb-pion.ntrn.tech:443/"
+[[metrics.PYTH.config.assets]]
+ticker = "TIAUSD"
+id = "09f7c1d7dfbb7df2b8fe3d3d87ee94a2259d212da4f30c1f0540d066dfa44723"
+[[metrics.PYTH.config.assets]]
+ticker = "ATOMUSD"
+id = "b00b60f88b03a6a625a8d1c048c3f66653edf217439983d037e7222c4e612819"
+[[metrics.PYTH.config.assets]]
+ticker = "NTRNUSD"
+id = "a8e6517966a52cb1df864b2764f3629fde3f21d2b640b5c572fcd654cbccd65e"

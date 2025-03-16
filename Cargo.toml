@@ -14,7 +14,8 @@ async-trait = "0.1.88"
 toml = "0.8.20"
 serde = { version = "1.0.219", features = ["derive"] }
 tendermint-rpc = { version = "0.40.1", features = ["http-client"] }
-cosmos-sdk-proto = { version = "0.26.1" }
+cosmos-sdk-proto = { version = "0.26.1", features = ["cosmwasm"] }
 tonic = "0.12.3"
 bytes = "1.10.1"
 futures = "0.3.31"
+jq-rs = "0.4.1"
