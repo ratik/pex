@@ -1,3 +1,4 @@
+use crate::adapters::btc::BTCAdapter;
 use crate::adapters::cosmwasm_smart_query::CosmWasmSmartQueryAdapter;
 use crate::adapters::eth::ETHAdapter;
 use crate::adapters::{
@@ -17,6 +18,16 @@ pub async fn create_adapter(
 ) -> Result<Box<dyn MetricsAdapter + Send + Sync>, Box<dyn Error>> {
     println!("Creating adapter: {}", config.adapter);
     match config.adapter.as_str() {
+        "btc" => {
+            let addresses = config.config["addresses"]
+                .as_array()
+                .ok_or("Missing addresses")?
+                .iter()
+                .map(|v| v.as_str().unwrap())
+                .collect::<Vec<_>>();
+
+            Ok(Box::new(BTCAdapter::new(&name, metrics, addresses).await?))
+        }
         "compound" | "erc20" | "eth" => {
             let addresses = config.config["addresses"]
                 .as_array()
