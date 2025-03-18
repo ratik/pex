@@ -1,8 +1,5 @@
 use bytes::Bytes;
 use cosmos_sdk_proto::traits::Message;
-use jaq_interpret::FilterT;
-use jaq_interpret::Val;
-use jaq_parse::parse;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -35,15 +32,12 @@ impl MetricsAdapter for CosmWasmSmartQueryAdapter {
         let storage = metrics.lock().await;
         for (smart_query, items) in self.queries.iter() {
             let path = Some("/cosmwasm.wasm.v1.Query/SmartContractState".to_string());
-            println!("{:?}", smart_query);
             let req = cosmos_sdk_proto::cosmwasm::wasm::v1::QuerySmartContractStateRequest {
                 address: self.contract_address.to_string(),
                 query_data: smart_query.to_string().into(),
             };
-            println!("{:?}", req);
             let mut buf = Vec::with_capacity(req.encoded_len());
             req.encode(&mut buf).unwrap();
-
             let answer = self.client.abci_query(path, buf, None, false).await?;
             let buf = answer.value;
             let response =
@@ -51,21 +45,17 @@ impl MetricsAdapter for CosmWasmSmartQueryAdapter {
                     Bytes::from(buf),
                 )
                 .unwrap();
-            println!("{:?}", response);
-            let json = &serde_json::from_slice(&response.data)?;
+            let json: Value = serde_json::from_slice(&response.data)?;
             for (key, jq_path, value_type) in items {
-                let new_value = get_json_value_by_path(json, jq_path).unwrap();
-                let new_value = new_value.to_string();
-
-                println!("!!!!{:?}", new_value);
-                unimplemented!();
+                let new_value: Value =
+                    get_json_value_by_path(json.clone().into(), jq_path).unwrap();
                 match value_type {
                     ValueType::Int => {
                         let key = self.get_key(&key);
                         let val = storage.get(&key);
                         match val {
                             Some(super::base::Value::Int(v)) => {
-                                v.set(new_value.parse()?);
+                                v.set(new_value.as_i64().unwrap());
                             }
                             _ => unreachable!(),
                         }
@@ -75,7 +65,7 @@ impl MetricsAdapter for CosmWasmSmartQueryAdapter {
                         let val = storage.get(&key);
                         match val {
                             Some(super::base::Value::Float(v)) => {
-                                v.set(new_value.parse()?);
+                                v.set(new_value.as_f64().unwrap());
                             }
                             _ => unreachable!(),
                         }
@@ -130,28 +120,28 @@ impl CosmWasmSmartQueryAdapter {
     }
 }
 
-fn get_json_value_by_path(json_value: &Value, query_path: &str) -> Option<Value> {
-    let value: Val = json_value.clone().into();
-    let mut defs = jaq_interpret::ParseCtx::new(Vec::new());
-    // defs.insert_natives(jaq_json::defs());
-    // defs.insert_defs();
+fn get_json_value_by_path(json: jaq_json::Val, path: &str) -> Option<Value> {
+    use jaq_core::load::{Arena, File, Loader};
 
-    let (main, errs) = parse(query_path, jaq_parse::main());
-    if !errs.is_empty() {
-        panic!("Parsing error(s) encountered");
-    }
-    let out: Vec<serde_json::Value> = defs
-        .compile(main.unwrap())
-        .run((
-            jaq_interpret::Ctx::new([], &jaq_interpret::RcIter::new(core::iter::empty())),
-            jaq_interpret::Val::from(value),
-        ))
-        .filter_map(|x| Some(x.ok()?.into()))
+    let arena = Arena::default();
+    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
+    let modules = loader
+        .load(&arena, File {
+            path: (),
+            code: path,
+        })
+        .unwrap();
+    let filter = jaq_core::Compiler::default()
+        .with_funs(jaq_std::funs().chain(jaq_json::funs()))
+        .compile(modules)
+        .unwrap();
+    let inputs = jaq_core::RcIter::new(core::iter::empty());
+    let out = filter
+        .run((jaq_core::Ctx::new([], &inputs), json))
         .collect::<Vec<_>>();
-    println!("{:?}", out);
     if out.is_empty() {
         None
     } else {
-        Some(out[0].clone())
+        Some(out[0].clone().unwrap().into())
     }
 }

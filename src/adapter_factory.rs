@@ -1,8 +1,3 @@
-use ethers::core::k256::elliptic_curve::rand_core::le;
-use serde::de::value;
-use tokio::sync::Mutex;
-
-use crate::adapters::base::ValueType;
 use crate::adapters::cosmwasm_smart_query::CosmWasmSmartQueryAdapter;
 use crate::adapters::{
     base::MetricsAdapter, compound::CompoundAdapter, cosmos_bank::CosmosBankAdapter,
@@ -12,6 +7,7 @@ use crate::config::MetricConfig;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub async fn create_adapter(
     name: String,
