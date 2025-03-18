@@ -1,4 +1,5 @@
 use portfolio_explorer::adapters::base::Value;
+use portfolio_explorer::adapters::cosmwasm_smart_query::CosmWasmSmartQueryAdapter;
 use portfolio_explorer::config::Config;
 use portfolio_explorer::{adapter_factory::create_adapter, adapters::base::MetricsAdapter};
 use std::collections::HashMap;

@@ -46,6 +46,7 @@ pub enum Value {
     Float(GenericGauge<prometheus::core::AtomicF64>),
 }
 
+#[derive(Debug, Clone)]
 pub enum ValueType {
     Int,
     Float,
