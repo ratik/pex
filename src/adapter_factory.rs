@@ -1,4 +1,5 @@
 use crate::adapters::cosmwasm_smart_query::CosmWasmSmartQueryAdapter;
+use crate::adapters::eth::ETHAdapter;
 use crate::adapters::{
     base::MetricsAdapter, compound::CompoundAdapter, cosmos_bank::CosmosBankAdapter,
     erc20::Erc20Adapter,
@@ -16,17 +17,13 @@ pub async fn create_adapter(
 ) -> Result<Box<dyn MetricsAdapter + Send + Sync>, Box<dyn Error>> {
     println!("Creating adapter: {}", config.adapter);
     match config.adapter.as_str() {
-        "compound" | "erc20" => {
+        "compound" | "erc20" | "eth" => {
             let addresses = config.config["addresses"]
                 .as_array()
                 .ok_or("Missing addresses")?
                 .iter()
                 .map(|v| v.as_str().unwrap())
                 .collect::<Vec<_>>();
-
-            let contract = config.config["contract"]
-                .as_str()
-                .ok_or("Missing contract")?;
 
             let infura_token = config.config["infura_token"]
                 .as_str()
@@ -35,20 +32,40 @@ pub async fn create_adapter(
             let decimals: u8 = config.config["decimals"].as_u64().unwrap() as u8 - 2;
 
             match config.adapter.as_str() {
-                "compound" => Ok(Box::new(
-                    CompoundAdapter::new(
-                        &name,
-                        metrics,
-                        addresses,
-                        contract,
-                        infura_token,
-                        decimals,
-                    )
-                    .await?,
-                )),
-                "erc20" => Ok(Box::new(
-                    Erc20Adapter::new(&name, metrics, addresses, contract, infura_token, decimals)
+                "compound" => {
+                    let contract = config.config["contract"]
+                        .as_str()
+                        .ok_or("Missing contract")?;
+                    Ok(Box::new(
+                        CompoundAdapter::new(
+                            &name,
+                            metrics,
+                            addresses,
+                            contract,
+                            infura_token,
+                            decimals,
+                        )
                         .await?,
+                    ))
+                }
+                "erc20" => {
+                    let contract = config.config["contract"]
+                        .as_str()
+                        .ok_or("Missing contract")?;
+                    Ok(Box::new(
+                        Erc20Adapter::new(
+                            &name,
+                            metrics,
+                            addresses,
+                            contract,
+                            infura_token,
+                            decimals,
+                        )
+                        .await?,
+                    ))
+                }
+                "eth" => Ok(Box::new(
+                    ETHAdapter::new(&name, metrics, addresses, infura_token, decimals).await?,
                 )),
                 _ => unreachable!(),
             }
