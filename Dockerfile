@@ -1,25 +1,54 @@
-FROM rust:1.85 AS builder
+# 🏗️ Build stage using Alpine
+FROM rust:1.85-alpine AS builder
 
 WORKDIR /usr/src/app
 
-RUN apt-get update && apt-get install -y musl-tools
+# Install dependencies: OpenSSL, build tools, and pkg-config
+RUN apk add --no-cache \
+    openssl-dev \
+    libssl3 \
+    pkgconf \
+    build-base \
+    clang \
+    lld \
+    cmake \
+    git
 
-RUN rustup target add x86_64-unknown-linux-musl
+# Set OpenSSL environment variables
+ENV OPENSSL_DIR=/usr \
+    OPENSSL_INCLUDE_DIR=/usr/include \
+    OPENSSL_LIB_DIR=/usr/lib \
+    OPENSSL_STATIC=0 \
+    PKG_CONFIG_ALLOW_CROSS=1 \
+    PKG_CONFIG_PATH=/usr/lib/pkgconfig \
+    PKG_CONFIG_SYSROOT_DIR=/
 
+# Copy dependency files first for caching
 COPY Cargo.toml Cargo.lock ./
+
+# Pre-fetch dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release --target x86_64-unknown-linux-musl || true
+RUN cargo build --release || true
+
+# Copy actual source code
 COPY . .
-RUN cargo build --release --target x86_64-unknown-linux-musl
 
-FROM gcr.io/distroless/static-debian12
+# Final Rust build
+RUN cargo build --release
 
-COPY --from=builder /usr/src/app/target/x86_64-unknown-linux-musl/release/portfolio_explorer /usr/local/bin/portfolio_explorer
+# 🏗️ Final stage (Minimal Alpine Base)
+FROM alpine:latest
+
+# Install OpenSSL runtime for compatibility
+RUN apk add --no-cache libssl3
+
+# Copy the built binary
+COPY --from=builder /usr/src/app/target/release/portfolio_explorer /usr/local/bin/portfolio_explorer
 
 WORKDIR /
 
 EXPOSE 9100
 
-USER nonroot:nonroot
+USER nobody
 
 CMD ["/usr/local/bin/portfolio_explorer"]
