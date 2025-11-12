@@ -136,7 +136,7 @@ pub async fn create_adapter(
                         .unwrap()
                         .iter()
                         .map(|v| {
-                            let value_type = v["type"].as_str().unwrap();
+                            let value_type = v["type"].as_str().unwrap_or("Type not found");
                             let value_type = match value_type {
                                 "int" => super::adapters::base::ValueType::Int,
                                 "float" => super::adapters::base::ValueType::Float,
