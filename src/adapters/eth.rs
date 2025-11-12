@@ -34,12 +34,10 @@ impl ETHAdapter {
         name: &str,
         metrics: Arc<Mutex<HashMap<String, super::base::Value>>>,
         addresses: Vec<&str>,
-        token: &str,
+        rpc: &str,
         decimals: u8,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let provider = ethers::prelude::Provider::<ethers::providers::Http>::try_from(
-            "https://mainnet.infura.io/v3/".to_string() + token,
-        )?;
+        let provider = ethers::prelude::Provider::<ethers::providers::Http>::try_from(rpc)?;
         let client = Arc::new(provider);
         let mut storage = metrics.lock().await;
         for addr in addresses.clone() {
