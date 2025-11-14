@@ -1,5 +1,6 @@
 use super::base::MetricsAdapter;
 use ethers::types::{Address, U128};
+use ethers::utils::hex::ToHexExt;
 use ethers::{abi::Abi, types::U256};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -68,7 +69,6 @@ impl MorphoAdapter {
         let contract = ethers::contract::Contract::new(token_address, abi, client.clone());
         let main_token_address: ethers::types::Address =
             contract.method("MORPHO", ())?.call().await?;
-        println!("Main contract address: {:?}", main_token_address);
         let main_contract =
             ethers::contract::Contract::new(main_token_address, main_abi, client.clone());
         let mut storage = metrics.lock().await;
@@ -80,20 +80,23 @@ impl MorphoAdapter {
             )?);
             storage.insert(key, value);
         }
-        let key = format!("avaliable_liquidity_{}", main_token_address.to_string());
+        let key = format!(
+            "avaliable_liquidity_{}",
+            token_address.encode_hex_with_prefix()
+        );
         storage.insert(
             format!("{}_{}", name, &key),
             super::base::Value::Int(prometheus::IntGauge::new(
-                &key,
-                format!("Free liquidity for {}", main_token_address.to_string()),
+                &format!("{}_{}", name, &key),
+                format!("Free liquidity for {}", token_address),
             )?),
         );
-        let key = format!("idle_liquidity_{}", main_token_address.to_string());
+        let key = format!("idle_liquidity_{}", token_address.encode_hex_with_prefix());
         storage.insert(
             format!("{}_{}", name, &key),
             super::base::Value::Int(prometheus::IntGauge::new(
-                &key,
-                format!("Idle liquidity for {}", main_token_address.to_string()),
+                &format!("{}_{}", name, &key),
+                format!("Idle liquidity for {}", token_address),
             )?),
         );
 
@@ -104,7 +107,7 @@ impl MorphoAdapter {
                 .map(|addr| addr.parse().unwrap())
                 .collect(),
             contract,
-            token: token_address.to_string(),
+            token: token_address.encode_hex_with_prefix(),
             main_contract,
             name: name.to_string(),
             decimals,
@@ -221,17 +224,18 @@ impl MorphoAdapter {
             free_liquidity = free_liquidity.saturating_add(vault_available);
         }
 
-        let key = format!("avaliable_liquidity_{}", self.token.to_string());
-        match storage.get(&self.get_key(&key)) {
-            Some(super::base::Value::Int(v)) => {
-                v.set(free_liquidity.as_u64() as i64);
-            }
-            _ => unreachable!(),
-        }
-        let key = format!("idle_liquidity_{}", self.token.to_string());
+        let key = format!("idle_liquidity_{}", self.token);
         match storage.get(&self.get_key(&key)) {
             Some(super::base::Value::Int(v)) => {
                 v.set(idle_liquidity.as_u64() as i64);
+            }
+            _ => unreachable!(),
+        }
+
+        let key = format!("avaliable_liquidity_{}", self.token);
+        match storage.get(&self.get_key(&key)) {
+            Some(super::base::Value::Int(v)) => {
+                v.set(free_liquidity.as_u64() as i64);
             }
             _ => unreachable!(),
         }
