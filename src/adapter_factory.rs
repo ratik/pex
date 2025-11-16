@@ -37,9 +37,7 @@ pub async fn create_adapter(
                 .map(|v| v.as_str().unwrap())
                 .collect::<Vec<_>>();
 
-            let infura_token = config.config["infura_token"]
-                .as_str()
-                .ok_or("Missing infura_token")?;
+            let rpc = config.config["rpc"].as_str().ok_or("Missing rpc")?;
 
             let decimals: u8 = config.config["decimals"].as_u64().unwrap() as u8 - 2;
 
@@ -49,15 +47,8 @@ pub async fn create_adapter(
                         .as_str()
                         .ok_or("Missing contract")?;
                     Ok(Box::new(
-                        CompoundAdapter::new(
-                            &name,
-                            metrics,
-                            addresses,
-                            contract,
-                            infura_token,
-                            decimals,
-                        )
-                        .await?,
+                        CompoundAdapter::new(&name, metrics, addresses, contract, rpc, decimals)
+                            .await?,
                     ))
                 }
                 "erc20" => {
@@ -65,15 +56,8 @@ pub async fn create_adapter(
                         .as_str()
                         .ok_or("Missing contract")?;
                     Ok(Box::new(
-                        Erc20Adapter::new(
-                            &name,
-                            metrics,
-                            addresses,
-                            contract,
-                            infura_token,
-                            decimals,
-                        )
-                        .await?,
+                        Erc20Adapter::new(&name, metrics, addresses, contract, rpc, decimals)
+                            .await?,
                     ))
                 }
                 "morpho" => {
@@ -81,19 +65,12 @@ pub async fn create_adapter(
                         .as_str()
                         .ok_or("Missing contract")?;
                     Ok(Box::new(
-                        MorphoAdapter::new(
-                            &name,
-                            metrics,
-                            addresses,
-                            contract,
-                            infura_token,
-                            decimals,
-                        )
-                        .await?,
+                        MorphoAdapter::new(&name, metrics, addresses, contract, rpc, decimals)
+                            .await?,
                     ))
                 }
                 "eth" => Ok(Box::new(
-                    ETHAdapter::new(&name, metrics, addresses, infura_token, decimals).await?,
+                    ETHAdapter::new(&name, metrics, addresses, rpc, decimals).await?,
                 )),
                 _ => unreachable!(),
             }
