@@ -12,6 +12,7 @@ use tokio::sync::Semaphore;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let single_run = std::env::args().any(|arg| arg == "--once" || arg == "--single-run");
     let config = Config::from_file("config.toml")?;
 
     let registry = Arc::new(prometheus::Registry::new());
@@ -47,6 +48,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+    }
+
+    if single_run {
+        let adapters_clone = Arc::clone(&adapters);
+        let metrics_clone = Arc::clone(&metrics);
+        let semaphore = Arc::new(Semaphore::new(config.concurrency as usize));
+        let mut futures = FuturesUnordered::new();
+
+        {
+            let adapters_guard = adapters_clone.lock().await;
+            for (name, _) in adapters_guard.iter() {
+                let name = name.clone();
+                let adapters_clone = Arc::clone(&adapters_clone);
+                let metrics_clone = Arc::clone(&metrics_clone);
+                let semaphore_clone = Arc::clone(&semaphore);
+
+                futures.push(tokio::spawn(async move {
+                    let _permit = semaphore_clone.acquire().await.unwrap();
+                    let mut adapters_guard = adapters_clone.lock().await;
+                    if let Some(adapter) = adapters_guard.get_mut(&name) {
+                        match adapter.update_params(metrics_clone).await {
+                            Ok(_) => println!("Updated {}", name),
+                            Err(e) => eprintln!("Error updating {}: {}", name, e),
+                        }
+                    }
+                }));
+            }
+        }
+
+        while futures.next().await.is_some() {}
+
+        let mut buffer = String::new();
+        let encoder = prometheus::TextEncoder::new();
+        let metric_families = registry.gather();
+        encoder.encode_utf8(&metric_families, &mut buffer).unwrap();
+        print!("{}", buffer);
+        return Ok(());
     }
 
     let registry_clone = registry.clone();
