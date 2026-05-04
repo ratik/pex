@@ -127,10 +127,6 @@ impl MorphoV2Adapter {
         let main_token_address: ethers::types::Address =
             la_contract.method("morpho", ())?.call().await?;
 
-        println!(
-            "main_contract address: {:?}",
-            main_token_address.encode_hex()
-        );
         let main_contract =
             ethers::contract::Contract::new(main_token_address, main_abi, client.clone());
         let mut storage = metrics.lock().await;
@@ -227,15 +223,6 @@ impl MorphoV2Adapter {
 
         if let Some(params) = decode_liquidity_market_params(&liquidity_data) {
             let market_id = market_id(&params);
-            println!(
-                "liquidity_adapter_market_id: {:?}, loan_token: {:?}, collateral_token: {:?}, oracle: {:?}, irm: {:?}, lltv: {:?}",
-                market_id.encode_hex(),
-                params.0.encode_hex_with_prefix(),
-                params.1.encode_hex_with_prefix(),
-                params.2.encode_hex_with_prefix(),
-                params.3.encode_hex_with_prefix(),
-                params.4
-            );
 
             let (
                 total_supply_assets,
@@ -268,11 +255,6 @@ impl MorphoV2Adapter {
                 .checked_sub(total_borrow_assets)
                 .unwrap_or_default();
             let vault_available = vault_supply_assets.min(market_available.into());
-
-            println!(
-                "liquidity_adapter_market_available: {:?}, vault_supply_assets: {:?}, vault_available: {:?}",
-                market_available, vault_supply_assets, vault_available
-            );
 
             free_liquidity = vault_available;
         } else {
@@ -349,12 +331,7 @@ impl MorphoV2Adapter {
                 let market_available = total_supply_assets
                     .checked_sub(total_borrow_assets)
                     .unwrap_or_default();
-                println!(
-                    "market_id: {:?}, vault_supply_assets: {:?}, market_available: {:?}",
-                    market_id.encode_hex(),
-                    vault_supply_assets,
-                    market_available
-                );
+
                 let vault_available = vault_supply_assets.min(market_available.into());
 
                 free_liquidity = free_liquidity.saturating_add(vault_available);
