@@ -122,11 +122,34 @@ impl MorphoV2Adapter {
         let liquidity_adapter_address: ethers::types::Address =
             contract.method("liquidityAdapter", ())?.call().await?;
         let la_contract =
-            ethers::contract::Contract::new(liquidity_adapter_address, la_abi, client.clone());
+            ethers::contract::Contract::new(liquidity_adapter_address, la_abi.clone(), client.clone());
 
-        let main_token_address: ethers::types::Address =
-            la_contract.method("morpho", ())?.call().await?;
+        let mut main_token_address: Option<ethers::types::Address> = None;
+        if let Ok(method) = la_contract.method::<_, ethers::types::Address>("morpho", ()) {
+            if let Ok(address) = method.call().await {
+                main_token_address = Some(address);
+            }
+        }
 
+        if main_token_address.is_none() {
+            let adapters_length: U256 = contract.method("adaptersLength", ())?.call().await?;
+            for adapter_index in 0..adapters_length.as_u64() {
+                let adapter_address: ethers::types::Address = contract
+                    .method("adapters", U256::from(adapter_index))?
+                    .call()
+                    .await?;
+                let adapter_contract =
+                    ethers::contract::Contract::new(adapter_address, la_abi.clone(), client.clone());
+                if let Ok(method) = adapter_contract.method::<_, ethers::types::Address>("morpho", ()) {
+                    if let Ok(address) = method.call().await {
+                        main_token_address = Some(address);
+                        break;
+                    }
+                }
+            }
+        }
+
+        let main_token_address = main_token_address.ok_or("No Morpho adapter found")?;
         let main_contract =
             ethers::contract::Contract::new(main_token_address, main_abi, client.clone());
         let mut storage = metrics.lock().await;
@@ -258,12 +281,48 @@ impl MorphoV2Adapter {
 
             free_liquidity = vault_available;
         } else {
-            // No MorphoMarketV1AdapterV2 liquidityData. Fall back to old behavior: sum all adapter markets.
-            let market_ids_length: U256 = self
-                .la_contract
-                .method::<_, U256>("marketIdsLength", ())?
-                .call()
-                .await?;
+            // No MorphoMarketV1AdapterV2 liquidityData. If the liquidity adapter is not a Morpho
+            // market-list adapter, do not use `realAssets()` here: that is total deposits allocated
+            // through the adapter, not withdrawable liquidity.
+            let mut market_ids_length = None;
+            if let Ok(method) = self.la_contract.method::<_, U256>("marketIdsLength", ()) {
+                if let Ok(length) = method.call().await {
+                    market_ids_length = Some(length);
+                }
+            }
+
+            let market_ids_length = match market_ids_length {
+                Some(length) => length,
+                None => {
+                    // MorphoVaultV1Adapter: liquidity is the amount the adapter can withdraw from
+                    // the underlying MetaMorpho/V1 vault, not the adapter's `realAssets()` total position.
+                    let morpho_vault_v1_adapter_abi: Abi = serde_json::from_str(
+                        r#"[{"inputs":[],"name":"morphoVaultV1","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}]"#,
+                    )?;
+                    let morpho_vault_v1_adapter = ethers::contract::Contract::new(
+                        self.la_contract.address(),
+                        morpho_vault_v1_adapter_abi,
+                        self.contract.client(),
+                    );
+                    let morpho_vault_v1 = morpho_vault_v1_adapter
+                        .method::<_, Address>("morphoVaultV1", ())?
+                        .call()
+                        .await?;
+                    let morpho_vault_v1_abi: Abi = serde_json::from_str(
+                        r#"[{"inputs":[{"internalType":"address","name":"owner","type":"address"}],"name":"maxWithdraw","outputs":[{"internalType":"uint256","name":"maxAssets","type":"uint256"}],"stateMutability":"view","type":"function"}]"#,
+                    )?;
+                    let morpho_vault_v1_contract = ethers::contract::Contract::new(
+                        morpho_vault_v1,
+                        morpho_vault_v1_abi,
+                        self.contract.client(),
+                    );
+                    free_liquidity = morpho_vault_v1_contract
+                        .method::<_, U256>("maxWithdraw", self.la_contract.address())?
+                        .call()
+                        .await?;
+                    U256::zero()
+                }
+            };
 
             for queue_index in 0..market_ids_length.as_u64() {
                 let market_id: [u8; 32] = self
