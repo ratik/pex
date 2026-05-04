@@ -6,3 +6,4 @@ pub mod cosmwasm_smart_query;
 pub mod erc20;
 pub mod eth;
 pub mod morpho;
+pub mod morphov2;

@@ -2,6 +2,7 @@ use crate::adapters::btc::BTCAdapter;
 use crate::adapters::cosmwasm_smart_query::CosmWasmSmartQueryAdapter;
 use crate::adapters::eth::ETHAdapter;
 use crate::adapters::morpho::MorphoAdapter;
+use crate::adapters::morphov2::MorphoV2Adapter;
 use crate::adapters::{
     base::MetricsAdapter, compound::CompoundAdapter, cosmos_bank::CosmosBankAdapter,
     erc20::Erc20Adapter,
@@ -29,7 +30,7 @@ pub async fn create_adapter(
 
             Ok(Box::new(BTCAdapter::new(&name, metrics, addresses).await?))
         }
-        "compound" | "erc20" | "eth" | "morpho" => {
+        "compound" | "erc20" | "eth" | "morpho" | "morphov2" => {
             let addresses = config.config["addresses"]
                 .as_array()
                 .ok_or("Missing addresses")?
@@ -72,6 +73,15 @@ pub async fn create_adapter(
                 "eth" => Ok(Box::new(
                     ETHAdapter::new(&name, metrics, addresses, rpc, decimals).await?,
                 )),
+                "morphov2" => {
+                    let contract = config.config["contract"]
+                        .as_str()
+                        .ok_or("Missing contract")?;
+                    Ok(Box::new(
+                        MorphoV2Adapter::new(&name, metrics, addresses, contract, rpc, decimals)
+                            .await?,
+                    ))
+                }
                 _ => unreachable!(),
             }
         }
