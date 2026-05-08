@@ -78,8 +78,7 @@ pub async fn create_adapter(
                         .as_str()
                         .ok_or("Missing contract")?;
                     Ok(Box::new(
-                        MorphoV2Adapter::new(&name, metrics, addresses, contract, rpc, decimals)
-                            .await?,
+                        MorphoV2Adapter::new(&name, metrics, addresses, contract, rpc).await?,
                     ))
                 }
                 _ => unreachable!(),
