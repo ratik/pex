@@ -239,7 +239,16 @@ impl MorphoV2Adapter {
         storage: &mut std::collections::HashMap<String, super::base::Value>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut free_liquidity = U256::zero();
-        let mut idle_liquidity = U128::zero();
+
+        let asset: Address = self.contract.method("asset", ())?.call().await?;
+        let erc20_abi: Abi = serde_json::from_str(
+            r#"[{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]"#,
+        )?;
+        let erc20 = ethers::contract::Contract::new(asset, erc20_abi, self.contract.client());
+        let mut idle_liquidity: U256 = erc20
+            .method::<_, U256>("balanceOf", self.contract.address())?
+            .call()
+            .await?;
 
         let liquidity_data: Bytes = self
             .contract
@@ -373,13 +382,10 @@ impl MorphoV2Adapter {
 
                 if lltv.is_zero() && collateral_token.is_zero() && oracle.is_zero() && irm.is_zero()
                 {
-                    idle_liquidity = idle_liquidity.saturating_add(U128::from(
-                        mul_div_floor(
-                            supply_shares.into(),
-                            total_supply_assets.into(),
-                            total_supply_shares.into(),
-                        )
-                        .as_u128(),
+                    idle_liquidity = idle_liquidity.saturating_add(mul_div_floor(
+                        supply_shares,
+                        total_supply_assets.into(),
+                        total_supply_shares.into(),
                     ));
                     continue;
                 }
